@@ -1,0 +1,1 @@
+# Análisis técnico y señales
