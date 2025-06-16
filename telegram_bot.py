@@ -1,23 +1,29 @@
 import os
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from trading_bot import get_signal
+import time
+from telegram import Bot
+from trading_bot import obtener_senal
 from dotenv import load_dotenv
 
 load_dotenv()
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Bot iniciado.")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-async def signal_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    sig = get_signal()
-    await update.message.reply_text(sig or "No hay señal de trading ahora.")
+bot = Bot(token=TELEGRAM_TOKEN)
 
-def run():
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("signal", signal_cmd))
-    print("Bot corriendo...")
-    app.run_polling()
+def enviar_mensaje(texto):
+    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=texto)
+
+def iniciar_bot():
+    while True:
+        for timeframe in ['1h', '4h', '1d']:
+            senal = obtener_senal('BTCUSDT', timeframe)
+            if senal:
+                mensaje = f"📈 Señal detectada en {timeframe}:\n{senal}"
+            else:
+                mensaje = f"⏳ Sin señal en {timeframe}."
+
+            enviar_mensaje(mensaje)
+            time.sleep(1)  # Pequeño delay para evitar spam
+
+        time.sleep(60)  # Esperar 1 minuto antes de la próxima ronda
