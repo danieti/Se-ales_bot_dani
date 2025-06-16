@@ -1,29 +1,36 @@
 import os
 import time
+from dotenv import load_dotenv
 from telegram import Bot
 from trading_bot import obtener_senal
-from dotenv import load_dotenv
 
 load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
 bot = Bot(token=TELEGRAM_TOKEN)
 
-def enviar_mensaje(texto):
-    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=texto)
+INTERVALOS = ["60", "240", "D"]  # 1h, 4h, 1D en formato Bybit
+
+def enviar_mensaje(mensaje):
+    try:
+        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=mensaje)
+    except Exception as e:
+        print(f"Error enviando mensaje: {e}")
 
 def iniciar_bot():
+    simbolo = "BTCUSDT"  # Puedes cambiar o parametrizar esto
+
     while True:
-        for timeframe in ['1h', '4h', '1d']:
-            senal = obtener_senal('BTCUSDT', timeframe)
-            if senal:
-                mensaje = f"📈 Señal detectada en {timeframe}:\n{senal}"
-            else:
-                mensaje = f"⏳ Sin señal en {timeframe}."
+        ahora = time.gmtime()
+        minuto = ahora.tm_min
+        segundo = ahora.tm_sec
 
-            enviar_mensaje(mensaje)
-            time.sleep(1)  # Pequeño delay para evitar spam
+        if minuto == 0 and segundo <= 5:
+            for intervalo in INTERVALOS:
+                mensaje = obtener_senal(simbolo, intervalo)
+                enviar_mensaje(f"⏰ [{intervalo}] {mensaje}")
+            print("Esperando al siguiente cierre...")
+            time.sleep(60)
 
-        time.sleep(60)  # Esperar 1 minuto antes de la próxima ronda
+        time.sleep(1)
