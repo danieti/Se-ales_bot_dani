@@ -1,4 +1,9 @@
-import os import time import requests import numpy as np import pandas as pd from datetime import datetime from dotenv import load_dotenv from telegram import Bot
+import os 
+import time 
+import requests 
+import numpy as np 
+import pandas as pd 
+from datetime import datetime from dotenv import load_dotenv from telegram import Bot
 
 load_dotenv()
 
