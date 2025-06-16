@@ -1,0 +1,1 @@
+# Aquí puedes meter funciones generales (por ejemplo convertir UTC, logs, etc.)
