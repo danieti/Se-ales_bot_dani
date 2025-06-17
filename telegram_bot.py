@@ -1,36 +1,32 @@
-import os
 import time
-from dotenv import load_dotenv
-from telegram import Bot
-from trading_bot import obtener_senal
+from datetime import datetime
+from trading_bot import analizar_y_enviar
 
-load_dotenv()
+INTERVALOS = {
+    "60": "1h",
+    "240": "4h",
+    "1440": "1d"
+}
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-bot = Bot(token=TELEGRAM_TOKEN)
-
-INTERVALOS = ["60", "240", "D"]  # 1h, 4h, 1D en formato Bybit
-
-def enviar_mensaje(mensaje):
-    try:
-        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=mensaje)
-    except Exception as e:
-        print(f"Error enviando mensaje: {e}")
+# Guarda el timestamp del último cierre procesado por cada tf
+ultimo_cierre = {tf: None for tf in INTERVALOS}
 
 def iniciar_bot():
-    simbolo = "BTCUSDT"  # Puedes cambiar o parametrizar esto
+    print("🤖 Bot de señales iniciado...")
 
     while True:
-        ahora = time.gmtime()
-        minuto = ahora.tm_min
-        segundo = ahora.tm_sec
+        ahora = datetime.utcnow()
 
-        if minuto == 0 and segundo <= 5:
-            for intervalo in INTERVALOS:
-                mensaje = obtener_senal(simbolo, intervalo)
-                enviar_mensaje(f"⏰ [{intervalo}] {mensaje}")
-            print("Esperando al siguiente cierre...")
-            time.sleep(60)
+        for minutos, tf in INTERVALOS.items():
+            # Redondear a múltiplo de intervalo
+            cierre_actual = int(ahora.timestamp() // (int(minutos) * 60))
 
-        time.sleep(1)
+            if cierre_actual != ultimo_cierre[tf]:
+                print(f"⏰ Analizando {tf} - {ahora.strftime('%Y-%m-%d %H:%M')}")
+                try:
+                    analizar_y_enviar("BTCUSDT", tf)
+                except Exception as e:
+                    print(f"⚠️ Error al analizar {tf}: {e}")
+                ultimo_cierre[tf] = cierre_actual
+
+        time.sleep(60)
