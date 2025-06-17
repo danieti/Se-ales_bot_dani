@@ -1,83 +1,87 @@
 import os
 import requests
-import numpy as np
 import pandas as pd
+import numpy as np
 from datetime import datetime
 from dotenv import load_dotenv
+from telegram import Bot
+
+from utils import calcular_fibonacci, detectar_soporte_resistencia, formatear_mensaje
 
 load_dotenv()
 
-def obtener_velas(simbolo, intervalo, limite=100):
-    url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={simbolo}&interval={intervalo}&limit={limite}"
+BYBIT_API = "https://api.bybit.com/v5/market/kline"
+BYBIT_SYMBOL = "BTCUSDT"
+TIMEFRAMES = {"1h": 60, "4h": 240, "1d": 1440}
+LIMIT = 100
+
+bot = Bot(token=os.getenv("TELEGRAM_TOKEN"))
+chat_id = os.getenv("TELEGRAM_CHAT_ID")
+
+def obtener_velas(simbolo, tf, limite=LIMIT):
+    url = f"{BYBIT_API}?category=linear&symbol={simbolo}&interval={tf}&limit={limite}"
     response = requests.get(url)
     data = response.json()
 
     if data['retCode'] != 0:
-        print("Error al obtener velas:", data['retMsg'])
+        print("❌ Error al obtener velas:", data['retMsg'])
         return None
 
     df = pd.DataFrame(data['result']['list'], columns=[
         'timestamp', 'open', 'high', 'low', 'close', 'volume', 'turnover'
     ])
-    df[['open', 'high', 'low', 'close']] = df[['open', 'high', 'low', 'close']].astype(float)
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df[['open', 'high', 'low', 'close']] = df[['open', 'high', 'low', 'close']].astype(float)
     return df
 
-def analizar_estrategia(df):
-    df['ema_20'] = df['close'].ewm(span=20).mean()
-    df['ema_50'] = df['close'].ewm(span=50).mean()
+def calcular_indicadores(df):
+    df['ema20'] = df['close'].ewm(span=20).mean()
+    df['ema50'] = df['close'].ewm(span=50).mean()
     df['rsi'] = calcular_rsi(df['close'], 14)
     df['macd'], df['macd_signal'] = calcular_macd(df['close'])
+    return df
 
-    ultima = df.iloc[-1]
-    entrada = None
-
-    if ultima['ema_20'] > ultima['ema_50'] and ultima['macd'] > ultima['macd_signal'] and ultima['rsi'] > 50:
-        entrada = 'LONG'
-    elif ultima['ema_20'] < ultima['ema_50'] and ultima['macd'] < ultima['macd_signal'] and ultima['rsi'] < 50:
-        entrada = 'SHORT'
-
-    return entrada, ultima
-
-def calcular_rsi(series, periodo=14):
+def calcular_rsi(series, period=14):
     delta = series.diff()
-    ganancia = delta.where(delta > 0, 0)
-    perdida = -delta.where(delta < 0, 0)
-    media_ganancia = ganancia.rolling(window=periodo).mean()
-    media_perdida = perdida.rolling(window=periodo).mean()
-    rs = media_ganancia / media_perdida
+    gain = delta.where(delta > 0, 0.0)
+    loss = -delta.where(delta < 0, 0.0)
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
+    rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
 
-def calcular_macd(series):
-    ema12 = series.ewm(span=12).mean()
-    ema26 = series.ewm(span=26).mean()
-    macd = ema12 - ema26
-    signal = macd.ewm(span=9).mean()
-    return macd, signal
+def calcular_macd(series, fast=12, slow=26, signal=9):
+    ema_fast = series.ewm(span=fast).mean()
+    ema_slow = series.ewm(span=slow).mean()
+    macd = ema_fast - ema_slow
+    signal_line = macd.ewm(span=signal).mean()
+    return macd, signal_line
 
-def calcular_sl_tp(precio_entrada, direccion):
-    if direccion == 'LONG':
-        sl = precio_entrada * 0.98
-        tp1 = precio_entrada + (precio_entrada - sl)
-        tp2 = precio_entrada + 2 * (precio_entrada - sl)
-    elif direccion == 'SHORT':
-        sl = precio_entrada * 1.02
-        tp1 = precio_entrada - (sl - precio_entrada)
-        tp2 = precio_entrada - 2 * (sl - precio_entrada)
+def detectar_entrada(df):
+    # Condición de ejemplo: cruce de EMA + RSI bajo
+    if (
+        df['ema20'].iloc[-1] > df['ema50'].iloc[-1] and
+        df['ema20'].iloc[-2] < df['ema50'].iloc[-2] and
+        df['rsi'].iloc[-1] > 50
+    ):
+        return True
+    return False
+
+def analizar_y_enviar(simbolo, tf):
+    df = obtener_velas(simbolo, tf)
+    if df is None:
+        return
+
+    df = calcular_indicadores(df)
+
+    entrada = df['close'].iloc[-1]
+    soporte, resistencia = detectar_soporte_resistencia(df)
+    sl = soporte if entrada > soporte else resistencia
+    tp1, tp2 = calcular_fibonacci(entrada, sl)
+
+    if detectar_entrada(df):
+        mensaje = formatear_mensaje(entrada, sl, tp1, tp2, simbolo, tf)
     else:
-        sl = tp1 = tp2 = None
+        mensaje = f"🔍 Sin señal para {simbolo} en temporalidad {tf}."
 
-    return round(sl, 2), round(tp1, 2), round(tp2, 2)
-
-def obtener_senal(simbolo, intervalo):
-    df = obtener_velas(simbolo, intervalo)
-    if df is None or df.empty:
-        return "❌ No se pudieron obtener velas."
-
-    senal, ultima = analizar_estrategia(df)
-
-    if senal:
-        sl, tp1, tp2 = calcular_sl_tp(ultima['close'], senal)
-        return f"✅ Señal {senal} detectada\n💰 Entrada: {ultima['close']}\n🛑 SL: {sl}\n🎯 TP1: {tp1}\n🎯 TP2: {tp2}"
-    else:
-        return "📉 Sin señal en esta vela."
+    bot.send_message(chat_id=chat_id, text=mensaje)
