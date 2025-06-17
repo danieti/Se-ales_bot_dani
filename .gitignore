@@ -1,1 +1,15 @@
+# Entornos
 .env
+__pycache__/
+*.pyc
+
+# Archivos del sistema
+.DS_Store
+*.swp
+
+# Replit
+.replit
+*.sqlite3
+
+# Archivos temporales
+*.log
