@@ -1,15 +1,11 @@
-# Bot de Señales Técnicas
+# 🤖 Señales Bot - Análisis Técnico Automático
 
-Bot que analiza datos de Bybit (velas, EMA, MACD, RSI, patrones) y envía señales a Telegram.
+Bot de trading que analiza BTC/USDT usando análisis técnico y patrones en 1h, 4h y 1d. Envía alertas automáticas por Telegram indicando si hay entrada o no al cierre de cada vela.
 
-## Archivos
-- `main.py`: punto de entrada
-- `telegram_bot.py`: envía mensajes por Telegram
-- `trading_bot.py`: lógica técnica
-- `utils.py`: funciones auxiliares
+## 🔍 Funciones
+- Análisis con RSI, MACD y EMAs
+- Patrones de velas
+- Fibonacci para establecer TP y SL con relación 2:1
+- Envío automático de alertas a Telegram
 
-## Instrucciones
-1. Clona el repo
-2. Crea archivo `.env` con las claves
-3. Instala dependencias: `pip install -r requirements.txt`
-4. Ejecuta con `python main.py`
+## 🧱 Estructura del proyecto
